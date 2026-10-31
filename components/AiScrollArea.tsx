@@ -18,7 +18,7 @@ export default function AiScrollArea({ cacheKey, revision, children }: { cacheKe
       onWheel={e=>{if(e.deltaY<0){memory.current.pause(cacheKey,e.currentTarget.scrollTop);setFollowing(false);}}}
       onTouchStart={e=>{memory.current.pause(cacheKey,e.currentTarget.scrollTop);setFollowing(false);}}
       onKeyDown={e=>{if(['ArrowUp','PageUp','Home'].includes(e.key)){memory.current.pause(cacheKey,e.currentTarget.scrollTop);setFollowing(false);}}}
-      onScroll={e=>{const el=e.currentTarget;memory.current.save(cacheKey,el.scrollTop,el.scrollHeight,el.clientHeight);setFollowing(memory.current.read(cacheKey).follow);}}>
+      onScroll={e=>{const el=e.currentTarget;const previous=memory.current.read(cacheKey); if(el.scrollTop < previous.top - 1) memory.current.pause(cacheKey,el.scrollTop); else memory.current.save(cacheKey,el.scrollTop,el.scrollHeight,el.clientHeight);setFollowing(memory.current.read(cacheKey).follow);}}>
       <div ref={content} className="ai-scroll-content">{children}</div>
     </div>
     <div className="ai-scroll-status"><span>{following?'已跟随底部':'已暂停跟随，可向上阅读'}</span><button type="button" onClick={()=>{memory.current.bottom(cacheKey);setFollowing(true);follow();}}>回到底部</button></div>
