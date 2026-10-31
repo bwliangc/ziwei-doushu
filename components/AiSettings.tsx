@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { BASE_LABEL, readError, type AiConfig } from '@/lib/ai/client';
+import { BASE_LABEL, readError, validKey, type AiConfig } from '@/lib/ai/client';
 export default function AiSettings({ onChange, disabled = false }: { onChange: (config: AiConfig) => void; disabled?: boolean }) {
   const [key, setKey] = useState(''); const [model, setModel] = useState(''); const [models, setModels] = useState<string[]>([]);
   const [remember, setRemember] = useState(false); const [ready, setReady] = useState(false); const [busy, setBusy] = useState(false); const [status, setStatus] = useState('');
@@ -8,13 +8,13 @@ export default function AiSettings({ onChange, disabled = false }: { onChange: (
   useEffect(() => { try { const local = localStorage.getItem('ziwei-ai'); const saved = local || sessionStorage.getItem('ziwei-ai'); if (saved) { const c = JSON.parse(saved); setKey(typeof c.key === 'string' ? c.key : ''); setModel(typeof c.model === 'string' ? c.model : ''); setRemember(!!local); } } catch { /* storage unavailable */ } setReady(true); return () => controller.current?.abort(); }, []);
   useEffect(() => { if (!ready) return; onChange({ key, model }); try { localStorage.removeItem('ziwei-ai'); sessionStorage.removeItem('ziwei-ai'); if (key) (remember ? localStorage : sessionStorage).setItem('ziwei-ai', JSON.stringify({ key, model })); } catch { setStatus('浏览器存储不可用，配置仅在当前页面保留。'); } }, [key, model, remember, ready, onChange]);
   const run = async (test: boolean) => {
-    if (!key.trim() || (test && !model)) { setStatus('请填写 API Key 并选择模型。'); return; }
+    if (!validKey(key) || (test && !model)) { setStatus('请填写 API Key 并选择模型。'); return; }
     const abort = new AbortController(); controller.current = abort; setBusy(true); setStatus(test ? '正在测试所选模型（会产生少量用量）…' : '正在获取模型…');
     try {
       const res = await fetch(test ? '/api/ai/test' : '/api/ai/models', { method: test ? 'POST' : 'GET', headers: { Authorization: `Bearer ${key.trim()}`, 'Content-Type': 'application/json' }, ...(test ? { body: JSON.stringify({ model }) } : {}), signal: abort.signal });
       if (!res.ok) throw new Error(await readError(res));
       if (test) { setStatus('连接测试成功，所选模型可调用。'); } else { const j = await res.json(); const ids = j.data.map((x: { id: string }) => x.id) as string[]; setModels(ids); if (!ids.includes(model)) setModel(ids[0] || ''); setStatus(ids.length ? `已获取 ${ids.length} 个可用模型。` : '该 Key 暂无可用模型。'); }
-    } catch (e) { setStatus(abort.signal.aborted ? '已取消。' : e instanceof Error ? e.message : '连接失败。'); } finally { setBusy(false); }
+    } catch (e) { setStatus(abort.signal.aborted ? '已取消。' : e instanceof Error && !(e instanceof TypeError) ? e.message : '连接失败，请检查网络和 Key 格式。'); } finally { setBusy(false); }
   };
   return <details open className="p-3 text-xs space-y-2" style={{ borderBottom: '1px solid var(--t-border)' }}>
     <summary className="cursor-pointer font-semibold">AI 设置 · ChatAPI</summary>

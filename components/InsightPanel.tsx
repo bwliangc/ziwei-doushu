@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { ZiweiChart, Palace } from '@/lib/ziwei/types';
 import type { TimeView } from './TimeNav';
 import AiSettings from './AiSettings';
-import { consumeStream, readError, type AiConfig } from '@/lib/ai/client';
+import { consumeStream, readError, validKey, type AiConfig } from '@/lib/ai/client';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -285,14 +285,14 @@ ${selectedSiHua.starName}化${selectedSiHua.siHua}落在【${palaceName}】，�
         const updated = [...prev]; updated[updated.length - 1] = { role: 'assistant', content: text }; return updated;
       }));
     } catch (e) {
-      const text = abort.signal.aborted ? '已取消解读。' : e instanceof Error ? e.message : '解读失败，请重试。';
+      const text = abort.signal.aborted ? '已取消解读。' : e instanceof Error && !(e instanceof TypeError) ? e.message : '解读失败，请检查网络后重试。';
       setMessages(prev => [...prev, { role: 'assistant', content: text }]);
     } finally { setLoading(false); loadingRef.current = false; }
   };
 
   const sendMessage = (text: string, hidden = false) => {
     if (!text.trim() || loadingRef.current) return;
-    if (!config.key.trim() || !config.model) { setMessages(prev => [...prev, { role: 'assistant', content: '请先在 AI 设置填写 Key、获取并选择模型，再点击解读。' }]); return; }
+    if (!validKey(config.key) || !config.model) { setMessages(prev => [...prev, { role: 'assistant', content: '请先在 AI 设置填写 Key、获取并选择模型，再点击解读。' }]); return; }
     loadingRef.current = true;
     setLoading(true);
 

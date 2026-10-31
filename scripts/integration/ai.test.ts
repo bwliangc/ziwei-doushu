@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { models, connectionTest, interpret, CHATAPI_BASE } from '../../lib/ai/server';
-import { consumeStream } from '../../lib/ai/client';
+import { consumeStream, validKey } from '../../lib/ai/client';
 const originalFetch = globalThis.fetch;
 const key = 'mock-user-key-DO-NOT-LOG';
 let mode = 'models'; let calls = 0;
@@ -22,6 +22,7 @@ globalThis.fetch = async (url, options) => {
 };
 async function main() {
   try {
+    assert.equal(validKey('mock\nkey'), false); assert.equal(validKey('密钥'), false); assert.equal(validKey(key), true);
     assert.equal((await models(req('/api/ai/models', undefined, ''))).status, 401); assert.equal(calls, 0);
     let res = await models(req('/api/ai/models')); assert.deepEqual((await res.json()).data, [{ id: 'mock-model' }]);
     for (const m of ['401','500','network']) { mode=m; res=await models(req('/api/ai/models')); assert.equal(res.status, m==='401'?401:502); assert.ok(!(await res.text()).includes(key)); }

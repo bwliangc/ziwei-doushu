@@ -1,4 +1,5 @@
 export interface AiConfig { key: string; model: string }
+export function validKey(key: string) { return /^[\x21-\x7e]{1,512}$/.test(key.trim()); }
 export const BASE_LABEL = 'https://chatapi.bwliangc.com/v1';
 export async function readError(res: Response) { try { const j = await res.json(); return typeof j.error === 'string' ? j.error : '请求失败，请稍后重试。'; } catch { return '请求失败，请稍后重试。'; } }
 export async function consumeStream(body: ReadableStream<Uint8Array>, update: (text: string) => void) {
