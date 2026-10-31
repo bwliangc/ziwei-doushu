@@ -1,5 +1,7 @@
 'use client';
 import { useState } from 'react';
+import AiSettings from '@/components/AiSettings';
+import { hasAiConfig, type AiConfig } from '@/lib/ai/client';
 import BirthForm from '@/components/BirthForm';
 import ChartBoard from '@/components/ChartBoard';
 import InsightPanel from '@/components/InsightPanel';
@@ -18,6 +20,8 @@ import type { BirthInfo, ZiweiChart, Palace } from '@/lib/ziwei/types';
  * 完全开放（见 lib/ziwei/*），可自由二次开发出你自己的界面。
  */
 export default function ChartPage() {
+  const [config, setConfig] = useState<AiConfig>({ key: '', model: '' });
+  const [birthConfig, setBirthConfig] = useState<AiConfig | null>(null);
   const [chart, setChart] = useState<ZiweiChart | null>(null);
   const [selectedPalace, setSelectedPalace] = useState<Palace | null>(null);
   const [view, setView] = useState<TimeView>('mingpan');
@@ -33,7 +37,9 @@ export default function ChartPage() {
           <br />
           （本页为引擎 Demo，完整商业版界面不在开源范围；排盘内核完全开放。）
         </p>
-        <BirthForm onSubmit={(info: BirthInfo) => setChart(generateChart(info))} />
+        <AiSettings onChange={setConfig} />
+        <p className="my-3 text-sm">先配置 Key 和模型再起盘，将自动解读命格一次；也可以先起盘，随后配置并点击开始解读。</p>
+        <BirthForm onSubmit={(info: BirthInfo) => { const next = generateChart(info); setBirthConfig(hasAiConfig(config) ? { ...config } : null); setChart(next); }} />
       </main>
     );
   }
@@ -68,7 +74,7 @@ export default function ChartPage() {
         }}
       >
         <ChartBoard chart={chart} onPalaceSelect={setSelectedPalace} />
-        <InsightPanel chart={chart} selectedPalace={selectedPalace} />
+        <InsightPanel chart={chart} selectedPalace={selectedPalace} initialConfig={birthConfig} autoStart={!!birthConfig} />
       </div>
     </main>
   );

@@ -7,47 +7,8 @@ import { generateChart as buildChart } from '@/lib/ziwei/algorithm';
 import type { BirthInfo, ZiweiChart } from '@/lib/ziwei/types';
 import { useTheme } from '@/components/ThemeProvider';
 import AiSettings from '@/components/AiSettings';
+import AiMarkdown from '@/components/AiMarkdown';
 import { consumeStream, readError, validKey, type AiConfig } from '@/lib/ai/client';
-
-// ─── AiContent 渲染器（与 InsightPanel 一致）────────────────
-function AiContent({ text, streaming }: { text: string; streaming?: boolean }) {
-  const lines = text.split('\n');
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      {lines.map((line, i) => {
-        const sectionMatch = line.match(/^\*\*【(.+?)】\*\*$/);
-        if (sectionMatch) {
-          return (
-            <div key={i} style={{ paddingTop: i === 0 ? 0 : '14px', paddingBottom: '4px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ac)', letterSpacing: '0.04em' }}>
-                【{sectionMatch[1]}】
-              </span>
-            </div>
-          );
-        }
-        if (line.trim() === '') return <div key={i} style={{ height: '4px' }} />;
-        const parts = line.split(/\*\*(.+?)\*\*/);
-        return (
-          <div key={i} style={{ fontSize: '13px', lineHeight: 1.75, color: 'var(--tx-2)' }}>
-            {parts.map((part, j) =>
-              j % 2 === 0
-                ? part
-                : <strong key={j} style={{ fontWeight: 500, color: 'var(--tx-0)' }}>{part}</strong>
-            )}
-          </div>
-        );
-      })}
-      {streaming && (
-        <span style={{
-          display: 'inline-block', width: '7px', height: '13px',
-          background: 'var(--ac)', opacity: 0.5, borderRadius: '2px',
-          animation: 'pulse 1s ease-in-out infinite',
-          verticalAlign: 'middle', marginLeft: '2px',
-        }} />
-      )}
-    </div>
-  );
-}
 
 export default function HemingPage() {
   const router = useRouter();
@@ -167,7 +128,7 @@ export default function HemingPage() {
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 24 }}>
-          <AiSettings onChange={setConfig} disabled={analyzing} />
+          <AiSettings onChange={setConfig} disabled={analyzing} onClear={() => { abortRef.current?.abort(); setConfig({ key: '', model: '' }); setAnalysis(''); setAnalysisError(''); }} />
           <p style={{ fontSize: 12, marginTop: 12 }}>仅在点击“开始合盘分析”或追问时发送双方命盘，请确认双方同意；姓名不会发送。与命盘页共用当前浏览器的 Key 和模型配置。</p>
         </div>
         <fieldset disabled={analyzing} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
@@ -249,7 +210,7 @@ export default function HemingPage() {
             </div>
           )}
 
-          {analysis && <AiContent text={analysis} streaming={analyzing} />}
+          {analysis && <AiMarkdown text={analysis} />}
 
           {formError && <p role="alert" style={{ color: '#dc2626' }}>{formError}</p>}
           {analysisError && (
