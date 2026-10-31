@@ -102,7 +102,7 @@ export default function HemingPage() {
       if (!cA || !cB) throw new Error('出生信息无法生成命盘，请检查日期和时间。');
       if (abort.signal.aborted) return;
       const res = await fetch('/api/heming', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ***)}` },
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: ['Bearer', config.key.trim()].join(' ') },
         body: JSON.stringify({ chartA: cA, chartB: cB, model: config.model, question: q }), signal: abort.signal,
       });
       if (!res.ok) throw new Error(await readError(res));

@@ -5,7 +5,7 @@ const originalFetch = globalThis.fetch;
 const userKey = 'mock-heming-key';
 const makeChart = (year: number, name: string) => ({ name, birthInfo: { year, month: 6, day: 15, hour: 3, gender: 'male', name }, palaces: Array.from({ length: 12 }, (_, branch) => ({ branch, name: '宫位'+branch, stars: [{ name: branch === 0 ? '紫微' : '天机' }] })) });
 const payload = { model: 'chosen-pair-model', chartA: makeChart(1990, '甲姓名不上传'), chartB: makeChart(1991, '乙姓名不上传'), question: '请分析合作沟通' };
-const request = (body: unknown, signal?: AbortSignal) => new Request('http://localhost/api/heming', { method: 'POST', headers: { authorization: '***'+userKey, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal });
+const request = (body: unknown, signal?: AbortSignal) => new Request('http://localhost/api/heming', { method: 'POST', headers: { authorization: ['Bearer', userKey].join(' '), 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal });
 let mode = 'success', calls = 0;
 globalThis.fetch = async (url, options) => {
   calls++; assert.equal(url, CHATAPI_BASE+'/chat/completions'); assert.equal((options?.headers as Record<string,string>).Authorization, 'Bearer '+userKey); assert.ok(options?.signal);
@@ -34,4 +34,4 @@ async function main(){try{
   const abort=new AbortController();abort.abort();res=await heming(request(payload,abort.signal));assert.ok([400,502].includes(res.status));
   console.log('Heming mock passed: dual charts, chosen model, both names removed, one-byte UTF8/SSE split, invalid dates/branches/gender/missing charts/question, 401/500/error/cancel. No real authenticated inference verified.');
 }finally{globalThis.fetch=originalFetch;}}
-main().catch(()=>{console.error('Heming integration failed (details suppressed)');process.exitCode=1;});
+main().catch(e=>{console.error(String(e.stack || e).split(userKey).join('[redacted]'));process.exitCode=1;});
