@@ -66,14 +66,10 @@ export default function ChartPage() {
         onYearChange={setLiunianYear}
       />
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 380px)',
-          gap: 20, marginTop: 16, alignItems: 'start',
-        }}
-      >
+      <div className="chart-reading-layout">
+        <div className="chart-reading-board">
         <ChartBoard chart={chart} onPalaceSelect={setSelectedPalace} />
+        </div>
         <InsightPanel chart={chart} selectedPalace={selectedPalace} initialConfig={birthConfig} autoStart={!!birthConfig} />
       </div>
     </main>

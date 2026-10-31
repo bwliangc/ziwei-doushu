@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { ScrollMemory, nearBottom } from '../../lib/ai/scroll';
+const m=new ScrollMemory();assert.equal(m.read('a').follow,true);
+m.save('a',120,1000,400);assert.equal(m.read('a').follow,false);assert.equal(m.read('a').top,120);
+m.save('b',600,1000,400);assert.equal(m.read('b').follow,true);assert.equal(m.read('a').top,120,'tab switch preserves each position');
+m.pause('b',590);assert.equal(m.read('b').follow,false,'upward input stops stream following immediately');
+m.bottom('a');assert.equal(m.read('a').follow,true);assert.equal(m.read('b').follow,false);
+assert.equal(nearBottom(550,1000,400),true);assert.equal(nearBottom(500,1000,400),false);
+assert.equal(m.read('other-chart-or-model').top,0);
+console.log('Scroll behavior passed: dimension restoration, near-bottom following, upward pause, explicit return, scope isolation. Browser layout not verified.');

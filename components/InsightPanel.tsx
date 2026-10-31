@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { ZiweiChart, Palace } from '@/lib/ziwei/types';
 import type { TimeView } from './TimeNav';
 import AiSettings from './AiSettings';
+import AiScrollArea from './AiScrollArea';
 import AiMarkdown from './AiMarkdown';
 import { consumeStream, readError, hasAiConfig, type AiConfig } from '@/lib/ai/client';
 import { DimensionSession, chartIdentity } from '@/lib/ai/dimensions';
@@ -74,22 +75,24 @@ export default function InsightPanel({ chart, selectedPalace, selectedSiHua, ini
   const descriptor = descriptors[active] || topicDescriptors.overview;
   const entry = session.get(active); const loading = entry?.status === 'loading';
   const submitQuestion = () => { const text = (questions[active] || '').trim(); if (!text || loading) return; if (text.length > 4000) { setNotice('追问最多4000字。'); return; } setQuestions(prev => ({ ...prev, [active]: '' })); void run(active, descriptor, text, { followup: true }); };
-  return <div className="rounded-xl card-glass overflow-hidden">
-    <AiSettings onChange={onConfig} onClear={onClear} />
+  return <div className="insight-panel rounded-xl card-glass">
+    <div className="insight-settings"><AiSettings onChange={onConfig} onClear={onClear} /></div>
     <p className="px-3 py-2 text-xs">起盘时已有 Key 和模型会自动解读命格一次；未配置时请配置后点击开始。各维度和模型独立缓存，切换已完成维度不重复调用。</p>
     <div role="tablist" aria-label="解读维度" className="flex flex-wrap gap-2 p-3 border-b">
       {Object.entries(descriptors).map(([id, item]) => <button type="button" role="tab" aria-selected={active === id} key={id} onClick={() => select(id, item)} className="rounded border px-3 py-2 text-xs" style={{ color: active === id ? 'var(--t-gold)' : 'var(--t-text)' }}>{item.title}{session.get(id)?.status === 'loading' ? ' · 生成中' : session.get(id)?.turns.length ? ' · 已缓存' : ''}</button>)}
     </div>
     {notice && <p role="status" className="p-3 text-sm">{notice}</p>}
-    <section role="tabpanel" aria-label={descriptor.title + '解读'} className="p-3 space-y-4">
+    <section role="tabpanel" aria-label={descriptor.title + '解读'} className="insight-dimension">
       <div className="flex justify-between items-center gap-2"><h3 className="font-semibold">{descriptor.title} · {config.model || '未选择模型'}</h3>
         <button type="button" className="border rounded p-2 text-xs disabled:opacity-40" disabled={loading} onClick={() => void run(active, descriptor, descriptor.prompt, { force: true })}>{entry?.turns.length ? '重新解读' : '开始解读'}</button>
         {loading && <button type="button" className="border rounded p-2 text-xs" onClick={() => session.cancel(active)}>取消本维度</button>}
       </div>
+      <AiScrollArea cacheKey={JSON.stringify([identity, config.model, credential.current, active])} revision={session.getVersion()}>
       {!entry?.turns.length && !entry?.pending && <p className="text-sm">此维度尚未解读。配置完成后点击“开始解读”。</p>}
       {entry?.turns.map((turn, i) => <section key={i} className="rounded border p-3" aria-label={turn.label}><h4 className="text-xs font-semibold mb-2">{turn.label}</h4><AiMarkdown text={turn.answer} /></section>)}
       {entry?.pending && <section className="rounded border p-3" aria-label="当前解读"><h4 className="text-xs mb-2">{entry.pending.label} · {loading ? '生成中…' : '未完成'}</h4><AiMarkdown text={entry.pending.text} />{entry.pending.error && <p role="alert" className="my-2">{entry.pending.error}</p>}{!loading && <button type="button" className="border rounded p-2 text-xs" onClick={() => void run(active, descriptor, entry.pending!.prompt, { followup: true })}>重试本次</button>}</section>}
-      <div className="flex gap-2"><input aria-label={descriptor.title + '追问'} className="border rounded p-2 bg-transparent min-w-0 flex-1 text-sm" maxLength={4000} value={questions[active] || ''} onChange={e => setQuestions(prev => ({ ...prev, [active]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter') submitQuestion(); }} placeholder={`仅针对${descriptor.title}追问`} disabled={loading} /><button type="button" className="border rounded p-2 text-sm disabled:opacity-40" disabled={loading || !(questions[active] || '').trim()} onClick={submitQuestion}>追问</button></div>
+      </AiScrollArea>
+      <div className="flex gap-2 p-3"><input aria-label={descriptor.title + '追问'} className="border rounded p-2 bg-transparent min-w-0 flex-1 text-sm" maxLength={4000} value={questions[active] || ''} onChange={e => setQuestions(prev => ({ ...prev, [active]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter') submitQuestion(); }} placeholder={`仅针对${descriptor.title}追问`} disabled={loading} /><button type="button" className="border rounded p-2 text-sm disabled:opacity-40" disabled={loading || !(questions[active] || '').trim()} onClick={submitQuestion}>追问</button></div>
     </section>
   </div>;
 }

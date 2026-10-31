@@ -7,6 +7,7 @@ import { generateChart as buildChart } from '@/lib/ziwei/algorithm';
 import type { BirthInfo, ZiweiChart } from '@/lib/ziwei/types';
 import { useTheme } from '@/components/ThemeProvider';
 import AiSettings from '@/components/AiSettings';
+import AiScrollArea from '@/components/AiScrollArea';
 import AiMarkdown from '@/components/AiMarkdown';
 import { consumeStream, readError, validKey, type AiConfig } from '@/lib/ai/client';
 
@@ -210,7 +211,7 @@ export default function HemingPage() {
             </div>
           )}
 
-          {analysis && <AiMarkdown text={analysis} />}
+          {analysis && <div className="heming-scroll"><AiScrollArea cacheKey={JSON.stringify([formA, formB, config.model])} revision={analysis}><AiMarkdown text={analysis} /></AiScrollArea></div>}
 
           {formError && <p role="alert" style={{ color: '#dc2626' }}>{formError}</p>}
           {analysisError && (
