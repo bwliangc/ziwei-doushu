@@ -9,6 +9,8 @@ import { useTheme } from '@/components/ThemeProvider';
 import AiSettings from '@/components/AiSettings';
 import AiScrollArea from '@/components/AiScrollArea';
 import AiMarkdown from '@/components/AiMarkdown';
+import { getChartSession } from '@/lib/ai/session-cache';
+import { chartIdentity, type DimensionSession } from '@/lib/ai/dimensions';
 import { consumeStream, readError, validKey, type AiConfig } from '@/lib/ai/client';
 
 export default function HemingPage() {
@@ -18,9 +20,10 @@ export default function HemingPage() {
 
   // ─── 双方命盘状态 ─────────────────────────────────────────
   const [config, setConfig] = useState<AiConfig>({ key: '', model: '' });
-  const abortRef = useRef<AbortController | null>(null);
+  const currentSession = useRef<{ session: DimensionSession; dimension: string } | null>(null);
+  const subscription = useRef<(() => void) | null>(null);
   const busyRef = useRef(false);
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(() => () => subscription.current?.(), []);
   // 双方表单状态由 BirthForm onFormSave 同步到此处，统一按钮触发起盘
   const [formA, setFormA] = useState<BirthFormState | null>(null);
   const [formB, setFormB] = useState<BirthFormState | null>(null);
@@ -48,32 +51,41 @@ export default function HemingPage() {
     !!(f && f.year && f.month && f.day && f.gender && (f.unknownTime || (f.clockHour !== '' && f.clockMinute !== '')));
 
   // ─── 统一入口：起盘 + 合盘分析 ─────────────────────────────
-  const runAnalysis = useCallback(async (q?: string) => {
+  const runAnalysis = useCallback(async (q?: string, force = false) => {
     if (busyRef.current) return;
     setFormError(null); setAnalysisError('');
     if (!validKey(config.key) || !config.model) { setFormError('请先在 AI 设置填写 Key、获取并选择模型。'); return; }
     if (!isFormReady(formA) || !isFormReady(formB)) { setFormError('请先填写双方完整出生信息'); return; }
     if (q && q.length > 4000) { setAnalysisError('问题最多4000字。'); return; }
-    const abort = new AbortController(); abortRef.current = abort; busyRef.current = true;
-    setAnalyzing(true); setAnalysis('');
+    busyRef.current = true;
+    let lease: ReturnType<DimensionSession['begin']> = null;
+    let session: DimensionSession | undefined;
     try {
-      // Always rebuild from the latest forms: edited birthdays must not reuse stale charts.
-      const [cA, cB] = await Promise.all([
-        generateChart(formToBirthInfo(formA!)), generateChart(formToBirthInfo(formB!)),
-      ]);
+      const [cA, cB] = await Promise.all([generateChart(formToBirthInfo(formA!)), generateChart(formToBirthInfo(formB!))]);
       if (!cA || !cB) throw new Error('出生信息无法生成命盘，请检查日期和时间。');
-      if (abort.signal.aborted) return;
+      const identity = chartIdentity({ chartA: chartIdentity(cA), chartB: chartIdentity(cB), kind: 'heming' });
+      session = getChartSession(identity); session.setContext(identity, config.model, 0);
+      const dimension = q?.trim() ? 'question:' + q.trim() : 'overview';
+      currentSession.current = { session, dimension };
+      subscription.current?.();
+      const sync = () => { const e = session!.get(dimension); setAnalysis(e?.pending?.text || e?.turns.at(-1)?.answer || ''); setAnalyzing(e?.status === 'loading'); setAnalysisError(e?.pending?.error || ''); };
+      subscription.current = session.subscribe(sync);
+      const previous = session.get(dimension);
+      lease = session.begin(dimension, '合盘', q?.trim() || '合盘综合解读', '合盘解读', { force, retry: previous?.status === 'error' || previous?.status === 'cancelled' });
+      sync(); if (!lease) return;
       const res = await fetch('/api/heming', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: ['Bearer', config.key.trim()].join(' ') },
-        body: JSON.stringify({ chartA: cA, chartB: cB, model: config.model, question: q }), signal: abort.signal,
+        body: JSON.stringify({ chartA: cA, chartB: cB, model: config.model, question: q }), signal: lease.signal,
       });
       if (!res.ok) throw new Error(await readError(res));
       if (!res.body) throw new Error('上游未返回响应流。');
-      await consumeStream(res.body, setAnalysis);
-      analysisRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      await consumeStream(res.body, text => session!.update(lease!, text));
+      session.complete(lease);
     } catch (e) {
-      setAnalysisError(abort.signal.aborted ? '已取消合盘解读。' : e instanceof Error && !(e instanceof TypeError) ? e.message : '合盘解读失败，请检查网络后重试。');
-    } finally { setAnalyzing(false); busyRef.current = false; }
+      const message = e instanceof Error && !(e instanceof TypeError) ? e.message : '合盘解读失败，请检查网络后重试。';
+      if (lease && session && !lease.signal.aborted) session.fail(lease, message);
+      else if (!lease) setAnalysisError(message);
+    } finally { busyRef.current = false; }
   }, [config, formA, formB, generateChart]);
 
   const cardStyle = {
@@ -129,7 +141,7 @@ export default function HemingPage() {
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 24 }}>
-          <AiSettings onChange={setConfig} disabled={analyzing} onClear={() => { abortRef.current?.abort(); setConfig({ key: '', model: '' }); setAnalysis(''); setAnalysisError(''); }} />
+          <AiSettings onChange={setConfig} disabled={analyzing} onClear={() => { if (currentSession.current) currentSession.current.session.cancel(currentSession.current.dimension); setConfig({ key: '', model: '' }); setAnalysis(''); setAnalysisError(''); }} />
           <p style={{ fontSize: 12, marginTop: 12 }}>仅在点击“开始合盘分析”或追问时发送双方命盘，请确认双方同意；姓名不会发送。与命盘页共用当前浏览器的 Key 和模型配置。</p>
         </div>
         <fieldset disabled={analyzing} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
@@ -173,7 +185,9 @@ export default function HemingPage() {
             <span style={{ fontSize: '11px', letterSpacing: '0.3em', color: 'var(--tx-3)' }}>合盘分析 · HEMING</span>
           </div>
 
-          {analyzing && <button type="button" onClick={() => abortRef.current?.abort()} className="border rounded p-2 text-sm">取消合盘解读</button>}
+          {analyzing && <button type="button" onClick={() => { if (currentSession.current) currentSession.current.session.cancel(currentSession.current.dimension); }} className="border rounded p-2 text-sm">取消合盘解读</button>}
+          {analysis && !analyzing && <button type="button" className="border rounded p-2 text-sm" onClick={() => runAnalysis(question || undefined, true)}>重新解读（消耗用量）</button>}
+          <p className="text-xs my-2">同盘同模型与相同问题优先复用本机标签页缓存；只有重新解读会有意再次消耗用量。</p>
           {/* 状态分支 */}
           {!analysis && !analyzing && (
             <div style={{ textAlign: 'center', padding: '32px 0' }}>
