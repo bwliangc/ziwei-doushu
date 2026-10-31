@@ -1,0 +1,23 @@
+name: ziwei-doushu
+services:
+  web:
+    build: .
+    image: ziwei-doushu:495b79e
+    restart: unless-stopped
+    ports:
+      - "172.17.0.1:13080:3000"
+    mem_limit: 768m
+    cpus: 1.0
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
