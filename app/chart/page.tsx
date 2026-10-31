@@ -1,8 +1,11 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AiSettings from '@/components/AiSettings';
 import { hasAiConfig, type AiConfig } from '@/lib/ai/client';
-import BirthForm from '@/components/BirthForm';
+import ChartRecords from '@/components/ChartRecords';
+import { ChartHistory, type ChartRecord } from '@/lib/history/charts';
+import { birthInfoFromForm, shouldAutoInterpret } from '@/lib/ziwei/form-input';
+import BirthForm, { type BirthFormState } from '@/components/BirthForm';
 import ChartBoard from '@/components/ChartBoard';
 import InsightPanel from '@/components/InsightPanel';
 import TimeNav, { type TimeView } from '@/components/TimeNav';
@@ -22,10 +25,32 @@ import type { BirthInfo, ZiweiChart, Palace } from '@/lib/ziwei/types';
 export default function ChartPage() {
   const [config, setConfig] = useState<AiConfig>({ key: '', model: '' });
   const [birthConfig, setBirthConfig] = useState<AiConfig | null>(null);
+  const [autoStart, setAutoStart] = useState(false);
+  const [formData, setFormData] = useState<BirthFormState | undefined>();
+  const [records, setRecords] = useState<ChartRecord[]>([]);
+  const [historyWarning, setHistoryWarning] = useState('');
+  const store = useRef<ChartHistory | null>(null);
+  useEffect(() => {
+    let storage: Storage | null = null; try { storage = window.localStorage; } catch {}
+    const history = new ChartHistory(storage); history.load(); store.current = history;
+    setRecords([...history.records]); setHistoryWarning(history.warning);
+  }, []);
+  const refreshRecords = () => { if (!store.current) return; setRecords([...store.current.records]); setHistoryWarning(store.current.warning); };
   const [chart, setChart] = useState<ZiweiChart | null>(null);
   const [selectedPalace, setSelectedPalace] = useState<Palace | null>(null);
   const [view, setView] = useState<TimeView>('mingpan');
   const [liunianYear, setLiunianYear] = useState(() => new Date().getFullYear());
+
+  const restore = (record: ChartRecord) => {
+    try {
+      const next = generateChart(birthInfoFromForm(record.form));
+      setFormData({ ...record.form }); setBirthConfig(hasAiConfig(config) ? { ...config } : null);
+      setAutoStart(shouldAutoInterpret('history', hasAiConfig(config))); setSelectedPalace(null); setView('mingpan'); setChart(next);
+    } catch { setHistoryWarning('该记录无法生成命盘，请删除后重新填写。'); }
+  };
+  const historyPanel = <ChartRecords records={records} warning={historyWarning} onRestore={restore}
+    onDelete={id => { store.current?.remove(id); refreshRecords(); }}
+    onClear={() => { store.current?.clear(); refreshRecords(); }} />;
 
   // ── 未起盘：展示出生信息表单 ──
   if (!chart) {
@@ -37,9 +62,16 @@ export default function ChartPage() {
           <br />
           （本页为引擎 Demo，完整商业版界面不在开源范围；排盘内核完全开放。）
         </p>
+        {historyPanel}
         <AiSettings onChange={setConfig} />
         <p className="my-3 text-sm">先配置 Key 和模型再起盘，将自动解读命格一次；也可以先起盘，随后配置并点击开始解读。</p>
-        <BirthForm onSubmit={(info: BirthInfo) => { const next = generateChart(info); setBirthConfig(hasAiConfig(config) ? { ...config } : null); setChart(next); }} />
+        <BirthForm initialData={formData} onSubmit={(info: BirthInfo, form: BirthFormState) => {
+          const next = generateChart(info);
+          setFormData({ ...form }); setBirthConfig(hasAiConfig(config) ? { ...config } : null);
+          setAutoStart(shouldAutoInterpret('new', hasAiConfig(config))); setChart(next);
+          try { if (!store.current) store.current = new ChartHistory(null); store.current.add(form); refreshRecords(); }
+          catch { setHistoryWarning('记录保存失败，本次起盘不受影响。'); }
+        }} />
       </main>
     );
   }
@@ -55,9 +87,10 @@ export default function ChartPage() {
           border: '1px solid #ccc', borderRadius: 8, background: 'transparent',
         }}
       >
-        ← 重新起盘
+        ← 编辑出生信息 / 重新起盘
       </button>
 
+      {historyPanel}
       <TimeNav
         chart={chart}
         view={view}
@@ -70,7 +103,7 @@ export default function ChartPage() {
         <div className="chart-reading-board">
         <ChartBoard chart={chart} onPalaceSelect={setSelectedPalace} />
         </div>
-        <InsightPanel chart={chart} selectedPalace={selectedPalace} initialConfig={birthConfig} autoStart={!!birthConfig} />
+        <InsightPanel chart={chart} selectedPalace={selectedPalace} initialConfig={birthConfig} autoStart={autoStart} />
       </div>
     </main>
   );

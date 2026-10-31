@@ -18,8 +18,8 @@ export default function AiSettings({ onChange, onClear, disabled = false }: { on
       if (test) { setStatus('连接测试成功，所选模型可调用。'); } else { const j = await res.json(); const ids = j.data.map((x: { id: string }) => x.id) as string[]; setModels(ids); if (!ids.includes(model)) setModel(ids[0] || ''); setStatus(ids.length ? `已获取 ${ids.length} 个可用模型。` : '该 Key 暂无可用模型。'); }
     } catch (e) { setStatus(abort.signal.aborted ? '已取消。' : e instanceof Error && !(e instanceof TypeError) ? e.message : '连接失败，请检查网络和 Key 格式。'); } finally { setBusy(false); }
   };
-  return <details open className="p-3 text-xs space-y-2" style={{ borderBottom: '1px solid var(--t-border)' }}>
-    <summary className="cursor-pointer font-semibold">AI 设置 · ChatAPI</summary>
+  return <details className="p-3 text-xs space-y-2" style={{ borderBottom: '1px solid var(--t-border)' }}>
+    <summary className="cursor-pointer font-semibold">AI 设置 · ChatAPI · {validKey(key) && model ? `已配置 · ${model}` : '未配置完整'}</summary>
     <p>接口地址：{BASE_LABEL}（固定）</p>
     <label className="block">API Key<input aria-label="API Key" type="password" autoComplete="off" spellCheck={false} value={key} disabled={disabled || busy} onChange={e => { setKey(e.target.value); setModels([]); setModel(''); setStatus(''); }} className="block w-full p-2 rounded bg-transparent border" placeholder="填写你自己的 ChatAPI Key" /></label>
     <button type="button" disabled={busy || disabled || !key.trim()} onClick={() => run(false)} className="border rounded p-2 disabled:opacity-40">获取可用模型</button>
