@@ -87,7 +87,7 @@ function validPairChart(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const chart = value as Record<string, unknown>;
   const birth = chart.birthInfo as Record<string, unknown> | undefined;
-  if (!birth || typeof birth !== 'object' || !['male', 'female'].includes(String(birth.gender))) return false;
+  if (!birth || typeof birth !== 'object' || typeof birth.gender !== 'string' || !['male', 'female'].includes(birth.gender)) return false;
   const { year, month, day, hour } = birth;
   if (![year, month, day, hour].every(Number.isInteger)) return false;
   const y = year as number, m = month as number, d = day as number, h = hour as number;

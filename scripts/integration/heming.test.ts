@@ -26,6 +26,7 @@ async function main(){try{
     {...payload,chartB:{...payload.chartB,birthInfo:{...payload.chartB.birthInfo,month:2,day:30}}},
     {...payload,chartA:{...payload.chartA,birthInfo:{...payload.chartA.birthInfo,hour:12}}},
     {...payload,chartA:{...payload.chartA,birthInfo:{...payload.chartA.birthInfo,gender:'invalid'}}},
+    {...payload,chartA:{...payload.chartA,birthInfo:{...payload.chartA.birthInfo,gender:{toString:null,valueOf:null}}}},
     {...payload,question:{url:'http://169.254.169.254/'}}, {...payload,question:'x'.repeat(4001)}, {...payload,model:''},
   ]){const before=calls;res=await heming(request(bad));assert.equal(res.status,400);assert.equal(calls,before);}
   for(const m of ['401','500']){mode=m;res=await heming(request(payload));assert.equal(res.status,m==='401'?401:502);assert.ok(!(await res.text()).includes(userKey));}
