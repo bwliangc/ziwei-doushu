@@ -21,7 +21,9 @@ export default function InsightPanel({ chart, selectedPalace, selectedSiHua, ini
   const identity = useMemo(() => chartIdentity(chart), [chart]);
   const initial = useRef(initialConfig || { key: '', model: '' });
   const session = useMemo(() => { const s = getChartSession(identity); s.setContext(identity, initial.current.model, 0); return s; }, [identity]);
-  useSyncExternalStore(session.subscribe, session.getVersion, session.getVersion);
+  useSyncExternalStore(session.subscribe, session.getVersion, () => 0);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [config, setConfig] = useState<AiConfig>(initial.current);
   const configRef = useRef(config); const credential = useRef(0);
   const [active, setActive] = useState('overview');
@@ -75,13 +77,13 @@ export default function InsightPanel({ chart, selectedPalace, selectedSiHua, ini
     select(`sihua:${selectedSiHua.view}:${selectedSiHua.starName}:${selectedSiHua.siHua}`, { title, prompt: `请结合命盘分析${title}的落宫与三方四正影响，并说明不确定性和实际建议。` });
   }, [selectedSiHua, select]);
   const descriptor = descriptors[active] || topicDescriptors.overview;
-  const entry = session.get(active); const loading = entry?.status === 'loading';
+  const entry = mounted ? session.get(active) : undefined; const loading = entry?.status === 'loading';
   const submitQuestion = () => { const text = (questions[active] || '').trim(); if (!text || loading) return; if (text.length > 4000) { setNotice('追问最多4000字。'); return; } setQuestions(prev => ({ ...prev, [active]: '' })); void run(active, descriptor, text, { followup: true }); };
   return <div className="insight-panel rounded-xl card-glass">
     <div className="insight-settings"><AiSettings onChange={onConfig} onClear={onClear} /></div>
     <p className="px-3 py-2 text-xs">起盘时已有 Key 和模型会自动解读命格一次；未配置时请配置后点击开始。各维度和模型独立缓存，切换已完成维度不重复调用。结果仅缓存在本机当前标签页会话，刷新或回看优先复用；清除配置同时清除结果。</p>
     <div role="tablist" aria-label="解读维度" className="flex flex-wrap gap-2 p-3 border-b">
-      {Object.entries(descriptors).map(([id, item]) => <button type="button" role="tab" aria-selected={active === id} key={id} onClick={() => select(id, item)} className="rounded border px-3 py-2 text-xs" style={{ color: active === id ? 'var(--t-gold)' : 'var(--t-text)' }}>{item.title}{session.get(id)?.status === 'loading' ? ' · 生成中' : session.get(id)?.turns.length ? ' · 已缓存' : ''}</button>)}
+      {Object.entries(descriptors).map(([id, item]) => <button type="button" role="tab" aria-selected={active === id} key={id} onClick={() => select(id, item)} className="rounded border px-3 py-2 text-xs" style={{ color: active === id ? 'var(--t-gold)' : 'var(--t-text)' }}>{item.title}{mounted && session.get(id)?.status === 'loading' ? ' · 生成中' : mounted && session.get(id)?.turns.length ? ' · 已缓存' : ''}</button>)}
     </div>
     {notice && <p role="status" className="p-3 text-sm">{notice}</p>}
     <section role="tabpanel" aria-label={descriptor.title + '解读'} className="insight-dimension">

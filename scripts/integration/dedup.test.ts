@@ -20,3 +20,7 @@ const restored=new DimensionSession();restored.restore(s.snapshot());restored.se
 const forced=request(s,'overview','默认',{force:true})!;assert.equal(request(s,'overview','默认',{force:true}),null);s.update(forced,'有意重新结果');s.complete(forced);assert.equal(s.get('overview')?.turns.length,1);
 clearAiResults();assert.equal(s.list().length,0);assert.equal(storage.has('ziwei-ai-results-v1'),false);
 console.log('Call-count/cache passed: stable identity, auto/manual/remount single-flight=1; completed reuse=0; cached tab/model switch=0; repeated follow-up=0; error automatic retries=0; refresh restore, bounded local results without Key, explicit force and clear.');
+
+const dualA=chartIdentity({kind:'heming',chartA:chartIdentity({birthInfo:{year:1990,name:'甲'}}),chartB:chartIdentity({birthInfo:{year:1992,name:'乙'}})});
+const dualB=chartIdentity({kind:'heming',chartA:chartIdentity({birthInfo:{name:'更名',year:1990}}),chartB:chartIdentity({birthInfo:{name:'更名乙',year:1992}})});
+assert.equal(dualA,dualB);assert.notEqual(dualA,id);const dual=getChartSession(dualA);dual.setContext(dualA,'model-a',0);const dualLease=request(dual,'question:相处')!;assert.equal(request(getChartSession(dualB),'question:相处'),null);dual.update(dualLease,'合盘缓存');dual.complete(dualLease);assert.equal(request(dual,'question:相处'),null);clearAiResults();
