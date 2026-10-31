@@ -5,7 +5,7 @@ COPY package.json package-lock.json .npmrc ./
 RUN npm ci --no-audit --no-fund
 RUN apk add --no-cache git
 COPY . .
-RUN npm run typecheck && npm test && npx --no-install tsx scripts/integration/ai.test.ts && npm run build
+RUN npm run typecheck && npm test && npx --no-install tsx scripts/integration/ai.test.ts && npx --no-install tsx scripts/integration/heming.test.ts && npm run build
 RUN npm prune --omit=dev --no-audit --no-fund && rm -rf .git docs scripts
 FROM node:24-alpine
 WORKDIR /app

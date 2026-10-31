@@ -1,11 +1,13 @@
 'use client';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import BirthForm, { type BirthFormState } from '@/components/BirthForm';
 import { formToBirthInfo } from '@/lib/ziwei/share';
 import { generateChart as buildChart } from '@/lib/ziwei/algorithm';
 import type { BirthInfo, ZiweiChart } from '@/lib/ziwei/types';
 import { useTheme } from '@/components/ThemeProvider';
+import AiSettings from '@/components/AiSettings';
+import { consumeStream, readError, validKey, type AiConfig } from '@/lib/ai/client';
 
 // ─── AiContent 渲染器（与 InsightPanel 一致）────────────────
 function AiContent({ text, streaming }: { text: string; streaming?: boolean }) {
@@ -53,8 +55,10 @@ export default function HemingPage() {
   const isDark = theme === 'dark';
 
   // ─── 双方命盘状态 ─────────────────────────────────────────
-  const [chartA, setChartA] = useState<ZiweiChart | null>(null);
-  const [chartB, setChartB] = useState<ZiweiChart | null>(null);
+  const [config, setConfig] = useState<AiConfig>({ key: '', model: '' });
+  const abortRef = useRef<AbortController | null>(null);
+  const busyRef = useRef(false);
+  useEffect(() => () => abortRef.current?.abort(), []);
   // 双方表单状态由 BirthForm onFormSave 同步到此处，统一按钮触发起盘
   const [formA, setFormA] = useState<BirthFormState | null>(null);
   const [formB, setFormB] = useState<BirthFormState | null>(null);
@@ -63,9 +67,7 @@ export default function HemingPage() {
   const [analysis, setAnalysis] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [question, setQuestion] = useState('');
-  const [analysisError, setAnalysisError] = useState(false);
-  // 开源版不含 /api/heming：接口 404 时单独说明，而不是让用户反复重试
-  const [apiMissing, setApiMissing] = useState(false);
+  const [analysisError, setAnalysisError] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const analysisRef = useRef<HTMLDivElement>(null);
 
@@ -85,68 +87,32 @@ export default function HemingPage() {
 
   // ─── 统一入口：起盘 + 合盘分析 ─────────────────────────────
   const runAnalysis = useCallback(async (q?: string) => {
-    setFormError(null);
-    if (!isFormReady(formA) || !isFormReady(formB)) {
-      setFormError('请先填写双方完整出生信息');
-      return;
-    }
-    setAnalyzing(true);
-    setAnalysis('');
-    setAnalysisError(false);
-
+    if (busyRef.current) return;
+    setFormError(null); setAnalysisError('');
+    if (!validKey(config.key) || !config.model) { setFormError('请先在 AI 设置填写 Key、获取并选择模型。'); return; }
+    if (!isFormReady(formA) || !isFormReady(formB)) { setFormError('请先填写双方完整出生信息'); return; }
+    if (q && q.length > 4000) { setAnalysisError('问题最多4000字。'); return; }
+    const abort = new AbortController(); abortRef.current = abort; busyRef.current = true;
+    setAnalyzing(true); setAnalysis('');
     try {
-      // 并行起两张盘（如果还没起）
-      let cA = chartA;
-      let cB = chartB;
-      const [newA, newB] = await Promise.all([
-        cA ? Promise.resolve(cA) : generateChart(formToBirthInfo(formA!)),
-        cB ? Promise.resolve(cB) : generateChart(formToBirthInfo(formB!)),
+      // Always rebuild from the latest forms: edited birthdays must not reuse stale charts.
+      const [cA, cB] = await Promise.all([
+        generateChart(formToBirthInfo(formA!)), generateChart(formToBirthInfo(formB!)),
       ]);
-      cA = newA;
-      cB = newB;
-      if (!cA || !cB) {
-        setAnalysisError(true);
-        setAnalyzing(false);
-        return;
-      }
-      if (!chartA) setChartA(cA);
-      if (!chartB) setChartB(cB);
-
+      if (!cA || !cB) throw new Error('出生信息无法生成命盘，请检查日期和时间。');
+      if (abort.signal.aborted) return;
       const res = await fetch('/api/heming', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chartA: cA, chartB: cB, question: q ?? undefined }),
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ***)}` },
+        body: JSON.stringify({ chartA: cA, chartB: cB, model: config.model, question: q }), signal: abort.signal,
       });
-      if (res.status === 404) { setApiMissing(true); throw new Error('api-missing'); }
-      if (!res.ok || !res.body) throw new Error();
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let text = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        for (const line of chunk.split('\n')) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6);
-          if (data === '[DONE]') break;
-          try {
-            const delta = JSON.parse(data).delta?.text ?? '';
-            text += delta;
-            setAnalysis(text);
-          } catch { /* skip */ }
-        }
-      }
-      // scroll to analysis
-      setTimeout(() => analysisRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-    } catch {
-      setAnalysisError(true);
-    } finally {
-      setAnalyzing(false);
-    }
-  }, [chartA, chartB, formA, formB, generateChart]);
+      if (!res.ok) throw new Error(await readError(res));
+      if (!res.body) throw new Error('上游未返回响应流。');
+      await consumeStream(res.body, setAnalysis);
+      analysisRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      setAnalysisError(abort.signal.aborted ? '已取消合盘解读。' : e instanceof Error && !(e instanceof TypeError) ? e.message : '合盘解读失败，请检查网络后重试。');
+    } finally { setAnalyzing(false); busyRef.current = false; }
+  }, [config, formA, formB, generateChart]);
 
   const cardStyle = {
     background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.9)',
@@ -200,6 +166,11 @@ export default function HemingPage() {
           </p>
         </div>
 
+        <div style={{ ...cardStyle, marginBottom: 24 }}>
+          <AiSettings onChange={setConfig} disabled={analyzing} />
+          <p style={{ fontSize: 12, marginTop: 12 }}>仅在点击“开始合盘分析”或追问时发送双方命盘，请确认双方同意；姓名不会发送。与命盘页共用当前浏览器的 Key 和模型配置。</p>
+        </div>
+        <fieldset disabled={analyzing} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         {/* 双栏表单 */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}
           className="heming-grid">
@@ -224,6 +195,7 @@ export default function HemingPage() {
           </div>
         </div>
 
+        </fieldset>
         {/* ═══ 大合盘分析框（视觉中心，始终显示）════════════════ */}
         <div ref={analysisRef} style={{
           ...cardStyle,
@@ -239,6 +211,7 @@ export default function HemingPage() {
             <span style={{ fontSize: '11px', letterSpacing: '0.3em', color: 'var(--tx-3)' }}>合盘分析 · HEMING</span>
           </div>
 
+          {analyzing && <button type="button" onClick={() => abortRef.current?.abort()} className="border rounded p-2 text-sm">取消合盘解读</button>}
           {/* 状态分支 */}
           {!analysis && !analyzing && (
             <div style={{ textAlign: 'center', padding: '32px 0' }}>
@@ -261,11 +234,7 @@ export default function HemingPage() {
               >
                 开始合盘分析
               </button>
-              {formError && (
-                <div style={{ marginTop: '20px', fontSize: '13px', color: '#dc2626' }}>
-                  {formError}
-                </div>
-              )}
+
             </div>
           )}
 
@@ -282,11 +251,10 @@ export default function HemingPage() {
 
           {analysis && <AiContent text={analysis} streaming={analyzing} />}
 
+          {formError && <p role="alert" style={{ color: '#dc2626' }}>{formError}</p>}
           {analysisError && (
             <div style={{ padding: '12px 16px', borderRadius: '10px', border: '1px solid var(--bdr)', background: 'var(--bg-card)', fontSize: '13px', color: 'var(--tx-2)', marginTop: '12px' }}>
-              {apiMissing
-                ? '开源版不含合盘 AI 分析接口（/api/heming），需要你自己实现后才能用。两人的命盘可以分别到「排盘」页（/chart）查看。'
-                : '分析暂时不可用，请重试。'}
+              {analysisError}
             </div>
           )}
         </div>
@@ -335,6 +303,7 @@ export default function HemingPage() {
                 value={question}
                 onChange={e => setQuestion(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !analyzing) runAnalysis(question || undefined); }}
+                maxLength={4000}
                 placeholder="继续追问，如：哪几年是两人感情关键期？"
                 disabled={analyzing}
                 className="input-base"

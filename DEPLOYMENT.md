@@ -12,3 +12,7 @@ API地址固定https://chatapi.bwliangc.com/v1。浏览器通过同源/api/ai/mo
 构建执行typecheck、原10项回归、scripts/integration/ai.test.ts mock集成、next build。mock覆盖模型列表、用户鉴权、实际completion结构、中文/UTF8/跨块SSE、401/500/网络失败、流错误/截断、输入及跨站Origin；不等于有真实有效Key的端到端验收。没有授权测试Key时不得调用管理员Key。
 
 更新前给运行镜像打备份tag并备份源码/Compose。docker compose build通过后，docker compose up -d --no-deps --wait --wait-timeout 90 web。验证health、页面、canonical/sitemap、/api无Key401和无效Key401/403、公开JS内容。不要更新其他项目或CF。
+
+## 合盘AI
+
+/heming复用同一个AiSettings与当前标签页的Key/模型配置。填写双方信息后由用户点击开始或追问才请求/api/heming；双方姓名剔除，设置提示确认双方同意。每次分析从最新表单重新起盘，避免修改生日后复用旧盘。支持流式、取消及中文错误。双盘验证包含合法日期/时辰/性别、12个唯一地支宫位与星曜结构。新增heming.test.ts覆盖双盘上下文、姓名剔除、非法输入、SSE跨字节、401/500与取消。
