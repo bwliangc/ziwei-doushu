@@ -42,7 +42,7 @@ export class ChartHistory {
   private save() { try { if(!this.storage)throw new Error('unavailable');this.storage.setItem(HISTORY_KEY,JSON.stringify({version:1,records:this.records}));this.warning=''; } catch {this.warning='浏览器存储不可用或空间不足，记录仅在当前页面暂存。';} }
   add(value: unknown, now=new Date().toISOString()) {
     const form=validateHistoryForm(value);if(!form)throw new Error('出生参数无效，未保存记录。');
-    const id=recordIdentity(form);this.records=[{id,form,createdAt:now,rule:'birth-form-v1'},...this.records.filter(r=>r.id!==id)].slice(0,MAX_RECORDS);this.save();return this.records;
+    const id=recordIdentity(form);this.records=[{id,form,createdAt:now,rule:'birth-form-v1' as const},...this.records.filter(r=>r.id!==id)].slice(0,MAX_RECORDS);this.save();return this.records;
   }
   remove(id:string){this.records=this.records.filter(r=>r.id!==id);this.save();}
   clear(){this.records=[];this.save();}
